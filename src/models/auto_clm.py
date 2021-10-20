@@ -12,6 +12,7 @@ from typing import Dict, Tuple
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizer
 from transformers.models.gpt2 import GPT2Config, GPT2LMHeadModel
+from src.models.mistral_pixelfly_gpt2 import MistralPixelflyGPT2LMHeadModel
 
 from ..util import REGISTRY
 
@@ -59,7 +60,11 @@ def get_auto_clm_tokenizer(
         model = GPT2LMHeadModel(config)
         if gradient_checkpointing:
             model.gradient_checkpointing_enable()
-
+    elif "gpt2-pixelfly" in model_id:
+        overwatch.info(f"Initializing Custom GPT-2 Model from Configuration: `{REGISTRY[model_id]}`...")
+        model = MistralPixelflyGPT2LMHeadModel(config)
+        if gradient_checkpointing:
+            model.gradient_checkpointing_enable()
     # No Adaptive Gradient Checkpointing
     else:
         # Initialize Model
