@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from transformers import GPT2Config, GPT2LMHeadModel, GPT2Model
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
+from transformers.models.gpt2.modeling_gpt2 import Attention, Block, MLP
 from src.models.modules.blocksparse_linear import ButterflyBlockSparseLinear
 
 # Nest Overwatch under root `mistral` logger, inheriting formatting!
@@ -268,7 +268,7 @@ class MistralGPT2Model(GPT2Model):
         )
 
 
-class MistralPixelflyGPT2Attention(GPT2Attention):
+class MistralPixelflyGPT2Attention(Attention):
     def __init__(
         self,
         nx,
@@ -396,7 +396,7 @@ class MistralPixelflyGPT2Attention(GPT2Attention):
         return outputs
 
 
-class MistralPixelflyGPT2MLP(GPT2MLP):
+class MistralPixelflyGPT2MLP(MLP):
     def __init__(self, intermediate_size, config):
         super().__init__(intermediate_size, config)
         embed_dim = config.hidden_size
@@ -404,7 +404,7 @@ class MistralPixelflyGPT2MLP(GPT2MLP):
         self.c_proj = ButterflyBlockSparseLinear(intermediate_size, embed_dim, blocks=4)
 
 
-class MistralPixelflyGPT2Block(GPT2Block):
+class MistralPixelflyGPT2Block(Block):
     def __init__(self, n_ctx, config, layer_num, scale=False, reorder_attn=True, upcast_attn=True):
         super().__init__(n_ctx, config, scale)
         hidden_size = config.n_embd
