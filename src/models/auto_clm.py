@@ -33,6 +33,12 @@ def get_auto_clm_tokenizer(
 ) -> Tuple[AutoModelForCausalLM, PreTrainedTokenizer]:
     """Download/Load AutoConfig and Instantiate Corresponding Model and Tokenizer."""
 
+    # Handle special case for pixelfly 
+    use_sparse_model = False
+    if "gpt2-pixelfly" in model_id:
+        use_sparse_model = True
+        model_id = "gpt2-small"
+
     # Create Configuration
     if "gpt2" in model_id and model_configs:
         overwatch.info(f"Building Hugging Face GPT2Config from provided configs: {model_configs} ...")
@@ -56,15 +62,16 @@ def get_auto_clm_tokenizer(
 
     # Partial Gradient Checkpointing (currently only supported for GPT-2 models)
     if "gpt2" in model_id:
-        overwatch.info(f"Initializing Custom GPT-2 Model from Configuration: `{REGISTRY[model_id]}`...")
-        model = GPT2LMHeadModel(config)
-        if gradient_checkpointing:
-            model.gradient_checkpointing_enable()
-    elif "gpt2-pixelfly" in model_id:
-        overwatch.info(f"Initializing Custom GPT-2 Model from Configuration: `{REGISTRY[model_id]}`...")
-        model = MistralPixelflyGPT2LMHeadModel(config)
-        if gradient_checkpointing:
-            model.gradient_checkpointing_enable()
+        if use_sparse_model:
+            overwatch.info(f"Initializing Custom GPT-2 Model from Configuration: `{REGISTRY[model_id]}`...")
+            model = MistralPixelflyGPT2LMHeadModel(config)
+            if gradient_checkpointing:
+                model.gradient_checkpointing_enable()
+        else:
+            overwatchinfo(f"Initializing Custom GPT-2 Model from Configuration: `{REGISTRY[model_id]}`...")
+            model = GPT2LMHeadModel(config)
+            if gradient_checkpointing:
+                model.gradient_checkpointing_enable()
     # No Adaptive Gradient Checkpointing
     else:
         # Initialize Model

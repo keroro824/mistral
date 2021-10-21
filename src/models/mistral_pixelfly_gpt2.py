@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from transformers import GPT2Config, GPT2LMHeadModel, GPT2Model
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.gpt2.modeling_gpt2 import Attention, Block, MLP
+from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
 from src.models.modules.blocksparse_linear import ButterflyBlockSparseLinear
 
 # Nest Overwatch under root `mistral` logger, inheriting formatting!
@@ -258,7 +258,6 @@ class MistralGPT2Model(GPT2Model):
 
         if not return_dict:
             return tuple(v for v in [hidden_states, presents, all_hidden_states, all_self_attentions] if v is not None)
-
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
             past_key_values=presents,
@@ -268,7 +267,7 @@ class MistralGPT2Model(GPT2Model):
         )
 
 
-class MistralPixelflyGPT2Attention(Attention):
+class MistralPixelflyGPT2Attention(GPT2Attention):
     def __init__(
         self,
         nx,
@@ -281,7 +280,7 @@ class MistralPixelflyGPT2Attention(Attention):
         upcast_attn=True,
         log_activations=False,
     ):
-        super().__init__(nx, n_ctx, config, scale, is_cross_attention)
+        super().__init__(config, is_cross_attention, layer_num)
 
         self.log_activations = log_activations
         if self.log_activations:
@@ -291,11 +290,12 @@ class MistralPixelflyGPT2Attention(Attention):
             }
         assert layer_num > 0
         self.layer_num = layer_num
+        self.scale = scale
 
         # Numerical Stability
         self.reorder_attn, self.upcast_attn = reorder_attn, upcast_attn
 
-    def _attn(self, q, k, v, attention_mask=None, head_mask=None, output_attentions=False):
+    def _attn(self, q, k, v, attention_mask=None, head_mask=None):
         """
         Taken from:
             https://github.com/huggingface/transformers/blob/v4.5.0/src/transformers/models/gpt2/modeling_gpt2.py#L167
@@ -390,13 +390,11 @@ class MistralPixelflyGPT2Attention(Attention):
         if head_mask is not None:
             w = w * head_mask
 
-        outputs: Tuple = (torch.matmul(w, v),)
-        if output_attentions:
-            outputs += (w,)
-        return outputs
+        return torch.matmul(w, v), w
+        #return outputs
 
 
-class MistralPixelflyGPT2MLP(MLP):
+class MistralPixelflyGPT2MLP(GPT2MLP):
     def __init__(self, intermediate_size, config):
         super().__init__(intermediate_size, config)
         embed_dim = config.hidden_size
@@ -404,12 +402,13 @@ class MistralPixelflyGPT2MLP(MLP):
         self.c_proj = ButterflyBlockSparseLinear(intermediate_size, embed_dim, blocks=4)
 
 
-class MistralPixelflyGPT2Block(Block):
+class MistralPixelflyGPT2Block(GPT2Block):
     def __init__(self, n_ctx, config, layer_num, scale=False, reorder_attn=True, upcast_attn=True):
-        super().__init__(n_ctx, config, scale)
+        super().__init__(config, layer_idx=layer_num)
         hidden_size = config.n_embd
         self.attn = MistralPixelflyGPT2Attention(
             hidden_size, n_ctx, config, layer_num, scale=scale, reorder_attn=reorder_attn, upcast_attn=upcast_attn
         )
         inner_dim = config.n_inner if config.n_inner is not None else 4 * hidden_size
-        self.mlp = GPT2MLP(inner_dim, config)
+        self.mlp = MistralPixelflyGPT2MLP(inner_dim, config)
+        print(self.mlp.c_fc)
